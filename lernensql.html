@@ -1,401 +1,749 @@
 <!DOCTYPE html>
 <html lang="de" class="h-full">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SQL Lernabenteuer: Der Fall des Daten-Diamanten</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SQL Lernabenteuer — Version 2</title>
+
+    <!-- Tailwind (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- CodeMirror 6 (simple setup via CDN packages) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@6.0.1/theme/one-dark.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@codemirror/basic-setup@0.19.1/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@codemirror/lang-sql@0.19.3/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@codemirror/view@0.19.45/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@codemirror/state@0.19.6/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@codemirror/commands@0.19.6/dist/index.min.js"></script>
+
+    <!-- AlaSQL for in-browser SQL -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alasql/4.2.2/alasql.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
+
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #111827; /* bg-gray-900 */
+        :root{
+            --bg:#0b1220;
+            --panel:#0f1724;
         }
-        .font-mono {
-            font-family: 'Fira Code', monospace;
+        html,body,#app{height:100%;}
+        body{
+            background:linear-gradient(180deg,#071025 0%, #071823 100%);
+            color:#e6eef8;
+            font-family:Inter, sans-serif;
         }
-        /* Custom scrollbar for a better look */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1f2937; /* bg-gray-800 */
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4b5563; /* bg-gray-600 */
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280; /* bg-gray-500 */
-        }
-        /* Typing cursor effect */
-        .typing-cursor::after {
-            content: '▋';
-            animation: blink 1s step-end infinite;
-        }
-        @keyframes blink {
-            50% {
-                opacity: 0;
-            }
-        }
+        .mono{font-family:'Fira Code', monospace;}
+        /* small helpers */
+        .outline-cyan{box-shadow:0 0 0 3px rgba(34,211,238,0.08);}
+        /* code mirror container sizing */
+        .cm-container{height:190px;}
+        /* quiz option hover */
+        .quiz-opt:hover{background:rgba(255,255,255,0.03);cursor:pointer}
+        /* progress bar */
+        .progress-bg{background:linear-gradient(90deg,#0f1724, #0b1220);}
     </style>
 </head>
-<body class="h-full text-gray-200 p-2 sm:p-4">
+<body class="p-4">
 
-    <div id="app" class="flex flex-col h-full max-w-7xl mx-auto">
-        <header class="border-b-2 border-cyan-500/30 pb-2 mb-4">
-            <h1 class="text-2xl sm:text-3xl font-bold text-cyan-400">SQL Lernabenteuer</h1>
-            <p class="text-sm sm:text-base text-gray-400">Der Fall des Daten-Diamanten</p>
-        </header>
+<div id="app" class="max-w-7xl mx-auto flex flex-col gap-4 h-[calc(100vh-32px)]">
+    <header class="flex items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-cyan-400">SQL Lernabenteuer</h1>
+            <p class="text-sm text-gray-300">Der Fall des Daten-Diamanten — Erweitert</p>
+        </div>
 
-        <main class="flex-grow flex flex-col lg:flex-row gap-4 min-h-0">
+        <div class="flex items-center gap-3">
+            <button id="reset-btn" class="bg-gray-700 hover:bg-gray-600 text-sm text-gray-100 py-2 px-3 rounded">Neu starten</button>
+            <label class="flex items-center gap-2 text-sm">
+                <input id="toggle-mode" type="checkbox" class="w-4 h-4"/>
+                <span class="text-gray-300">Light Mode</span>
+            </label>
+        </div>
+    </header>
 
-            <!-- Linke Spalte: Story & Anweisungen -->
-            <section id="story-panel" class="lg:w-1/3 flex flex-col bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-                <h2 id="chapter-title" class="text-xl font-bold text-yellow-400 mb-2"></h2>
-                <div class="flex-grow overflow-y-auto pr-2">
-                    <div id="story-content" class="prose prose-invert text-gray-300"></div>
-                </div>
-            </section>
-
-            <!-- Mittlere Spalte: Datenbank & Editor -->
-            <section id="interactive-panel" class="lg:w-1/3 flex flex-col gap-4">
-                <div class="flex flex-col bg-gray-800/50 border border-gray-700 rounded-lg p-4 min-h-0">
-                    <h2 class="text-xl font-bold text-green-400 mb-2">Polizei-Datenbank</h2>
-                    <div id="db-tabs" class="flex border-b border-gray-600 mb-2"></div>
-                    <div id="db-content" class="flex-grow overflow-auto text-sm"></div>
-                </div>
-                <div class="flex flex-col bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-                    <div class="flex justify-between items-center mb-2">
-                        <h2 class="text-xl font-bold text-green-400">SQL-Editor</h2>
-                        <!-- NEU: Tutorial-Button (Glühbirne) -->
-                        <button id="hint-btn" title="Hilfe anzeigen" class="text-yellow-400 hover:text-yellow-300 transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M11 3a1 1 0 100 2h.01a1 1 0 100-2H11zM10 1a1 1 0 00-1 1v1a1 1 0 002 0V2a1 1 0 00-1-1zM10 15a1 1 0 00-1 1v1a1 1 0 102 0v-1a1 1 0 00-1-1zM4.343 5.757a1 1 0 00-1.414-1.414L2.5 4.779a1 1 0 101.414 1.414l.43- .43zM15.657 5.757a1 1 0 001.414-1.414l-1.414-1.414a1 1 0 00-1.414 1.414l1.414 1.414zM1.5 10a1 1 0 011-1h1.01a1 1 0 110 2H2.5a1 1 0 01-1-1zM17.5 10a1 1 0 011-1h1.01a1 1 0 110 2H18.5a1 1 0 01-1-1zM5.757 15.657a1 1 0 00-1.414 1.414l.43.43a1 1 0 001.414-1.414l-.43-.43zM14.243 15.657a1 1 0 00-1.414 1.414l1.414 1.414a1 1 0 001.414-1.414l-1.414-1.414z" />
-                                <path d="M10 4a6 6 0 100 12 6 6 0 000-12zM10 14a4 4 0 110-8 4 4 0 010 8z" />
-                            </svg>
-                        </button>
-                    </div>
-                    <textarea id="sql-editor" class="w-full h-32 bg-gray-900 border border-gray-600 rounded-md p-2 font-mono text-base focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Schreibe deinen SQL-Befehl hier..."></textarea>
-                    <button id="run-query-btn" class="mt-2 w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                        Befehl ausführen
-                    </button>
-                    <div id="status-message" class="mt-2 text-center h-6"></div>
-                </div>
-            </section>
-
-            <!-- Rechte Spalte: Ergebnisse -->
-            <section id="result-panel" class="lg:w-1/3 flex flex-col bg-gray-800/50 border border-gray-700 rounded-lg p-4 min-h-0">
-                <h2 class="text-xl font-bold text-blue-400 mb-2">Abfrage-Ergebnis</h2>
-                <div id="result-content" class="flex-grow overflow-auto">
-                    <p class="text-gray-500 italic">Das Ergebnis deiner Abfrage erscheint hier.</p>
-                </div>
-                <button id="next-chapter-btn" class="hidden mt-4 w-full bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                    Nächstes Kapitel
-                </button>
-            </section>
-        </main>
-    </div>
-
-    <!-- NEU: Tutorial Modal -->
-    <div id="tutorial-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
-        <div class="bg-gray-800 border border-yellow-500/50 rounded-lg shadow-xl max-w-2xl w-full p-6 relative">
-            <button id="close-modal-btn" class="absolute top-3 right-3 text-gray-400 hover:text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            </button>
-            <h3 class="text-2xl font-bold text-yellow-400 mb-4">Lösung und Erklärung</h3>
-            <div id="tutorial-command" class="bg-gray-900 p-3 rounded-md mb-4">
-                <code class="font-mono text-cyan-300 text-lg"></code>
-            </div>
-            <div id="tutorial-explanation" class="text-gray-300 space-y-2">
-            </div>
+    <!-- Fortschritt -->
+    <div class="w-full">
+        <div class="flex justify-between items-center mb-1">
+            <div class="text-sm text-gray-300">Kapitel <span id="chapter-number">1</span> / <span id="chapter-total">1</span></div>
+            <div class="text-sm text-gray-300" id="chapter-title-small">---</div>
+        </div>
+        <div class="w-full h-3 rounded progress-bg overflow-hidden">
+            <div id="progress-bar" class="h-full bg-cyan-500 transition-all" style="width:0%"></div>
         </div>
     </div>
 
+    <main class="flex gap-4 flex-1 min-h-0">
+        <!-- Left: Story & Quiz -->
+        <aside class="w-1/3 bg-[#071425] border border-gray-700 rounded-lg p-4 flex flex-col min-h-0">
+            <div class="flex justify-between items-start gap-2">
+                <h2 id="chapter-title" class="text-lg font-bold text-yellow-300"></h2>
+                <div class="flex items-center gap-2">
+                    <button id="hint-btn" title="Lösung & Erklärung" class="text-yellow-400 hover:text-yellow-300">
+                        <!-- lightbulb -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2a7 7 0 00-4 12.9V18a1 1 0 001 1h6a1 1 0 001-1v-3.1A7 7 0 0012 2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
 
-    <script type="module">
-        // --- DATENBANK-SIMULATION ---
-        const database = {
-            Zeugen: [
-                { id: 1, Name: 'Anna Schmidt', Aussage: 'Ich sah eine Person mit Hut weglaufen.' },
-                { id: 2, Name: 'Peter Müller', Aussage: 'Ein rotes Auto raste davon.' },
-                { id: 3, Name: 'Sabine Klein', Aussage: 'Es war gegen 22:00 Uhr.' }
-            ],
-            Fahrzeuge: [
-                { id: 101, Halter_ID: 201, Typ: 'Limousine', Farbe: 'blau' },
-                { id: 102, Halter_ID: 202, Typ: 'Kombi', Farbe: 'rot' },
-                { id: 103, Halter_ID: 203, Typ: 'Sportwagen', Farbe: 'schwarz' },
-                { id: 104, Halter_ID: 204, Typ: 'Kombi', Farbe: 'rot' },
-            ],
-            Verdaechtige: [
-                { id: 201, Name: 'Max Mustermann', Alibi: 'War zu Hause.' },
-                { id: 202, Name: 'Erika Mustermann', Alibi: 'War im Kino.' },
-                { id: 203, Name: 'Klaus Kleber', Alibi: 'War bei Freunden.' },
-                { id: 204, Name: 'Dieter Dieb', Alibi: 'Unbekannt.' },
-            ]
-        };
-        alasql.options.mysql = true;
-        Object.keys(database).forEach(tableName => {
-            alasql.tables[tableName] = { data: JSON.parse(JSON.stringify(database[tableName])) };
-        });
+            <div id="story-panel" class="mt-3 overflow-auto prose prose-invert text-sm text-gray-200 flex-1 min-h-0"></div>
 
-        // --- KAPITEL-DEFINITIONEN (MIT TUTORIAL) ---
-        const chapters = [
-            {
-                title: "Kapitel 1: Die Grundlagen",
-                story: `<p>Willkommen bei der Sondereinheit 'Daten', Anwärter! ... Dein erster Auftrag: Verschaffe dir einen Überblick über alle Zeugen.</p><p class="mt-4 p-2 bg-gray-700/50 rounded-md text-yellow-300"><strong>Aufgabe:</strong> Schreibe einen SQL-Befehl, der <strong>alle</strong> Daten aus der Tabelle <code>Zeugen</code> anzeigt.</p>`,
-                solutionCheck: (res) => res && res.length >= 3 && 'Name' in res[0] && 'Aussage' in res[0],
-                tutorial: {
-                    command: "SELECT * FROM Zeugen;",
-                    explanation: `<p><code>SELECT *</code>: Dieser Teil bedeutet "wähle alle Spalten aus". Das Sternchen (*) ist eine Abkürzung für "alle Spalten".</p><p><code>FROM Zeugen</code>: Dieser Teil sagt der Datenbank, aus welcher Tabelle die Daten geholt werden sollen, in diesem Fall aus der Tabelle <strong>Zeugen</strong>.</p><p>Das Semikolon <code>;</code> am Ende ist guter Stil und beendet den Befehl.</p>`
-                }
-            },
-            {
-                title: "Kapitel 2: Die Suche eingrenzen",
-                story: `<p>Gute Arbeit, Anwärter. Ein Zeuge sprach von einem roten Fluchtauto. ... Mit dem <code>WHERE</code>-Befehl kannst du deine Suche filtern.</p><p class="mt-4 p-2 bg-gray-700/50 rounded-md text-yellow-300"><strong>Aufgabe:</strong> Finde alle Fahrzeuge, deren Farbe <strong>rot</strong> ist.</p>`,
-                solutionCheck: (res) => res && res.length === 2 && res.every(car => car.Farbe === 'rot'),
-                tutorial: {
-                    command: "SELECT * FROM Fahrzeuge WHERE Farbe = 'rot';",
-                    explanation: `<p><code>SELECT * FROM Fahrzeuge</code>: Wie im ersten Kapitel wählen wir alle Spalten aus der Tabelle <strong>Fahrzeuge</strong> aus.</p><p><code>WHERE Farbe = 'rot'</code>: Das ist die neue Bedingung. <code>WHERE</code> filtert die Zeilen. Wir wollen nur die, bei denen der Wert in der Spalte <strong>Farbe</strong> exakt <code>'rot'</code> ist. Textwerte müssen immer in einfachen Anführungszeichen stehen.</p>`
-                }
-            },
-            {
-                title: "Kapitel 3: Neue Spuren",
-                story: `<p>Ausgezeichnet! ... Ein neuer Zeuge hat sich gemeldet: 'Benno Richter' ... Dafür benutzt du <code>INSERT INTO</code>.</p><p class="mt-4 p-2 bg-gray-700/50 rounded-md text-yellow-300"><strong>Aufgabe:</strong> Füge den neuen Zeugen 'Benno Richter' mit seiner Aussage in die <code>Zeugen</code>-Tabelle ein.</p>`,
-                solutionCheck: (res, query) => alasql.tables.Zeugen.data.some(z => z.Name === 'Benno Richter'),
-                tutorial: {
-                    command: "INSERT INTO Zeugen (Name, Aussage) VALUES ('Benno Richter', 'Ich habe den Täter erkannt!');",
-                    explanation: `<p><code>INSERT INTO Zeugen (...)</code>: Sagt der Datenbank, dass wir etwas in die Tabelle <strong>Zeugen</strong> einfügen wollen.</p><p><code>(Name, Aussage)</code>: Hier listen wir die Spalten auf, die wir befüllen möchten.</p><p><code>VALUES ('Benno Richter', '...')</code>: Hier geben wir die entsprechenden Werte in der gleichen Reihenfolge an. Wieder in Anführungszeichen, da es Text ist.</p>`
-                }
-            },
-            {
-                title: "Kapitel 4: Fehler korrigieren",
-                story: `<p>Perfekt, der neue Zeuge ist erfasst. ... Wir müssen bei Anna Schmidt die Aussage korrigieren. ... Um einen bestehenden Eintrag zu ändern, nutzt du <code>UPDATE</code>.</p><p class="mt-4 p-2 bg-gray-700/50 rounded-md text-yellow-300"><strong>Aufgabe:</strong> Korrigiere die Aussage von 'Anna Schmidt' in der <code>Zeugen</code>-Tabelle.</p>`,
-                solutionCheck: (res, query) => alasql.tables.Zeugen.data.find(z => z.Name === 'Anna Schmidt')?.Aussage.includes('große'),
-                tutorial: {
-                    command: "UPDATE Zeugen SET Aussage = 'Ich sah eine große Person mit Hut weglaufen.' WHERE Name = 'Anna Schmidt';",
-                    explanation: `<p><code>UPDATE Zeugen</code>: Wir wollen einen Eintrag in der Tabelle <strong>Zeugen</strong> aktualisieren.</p><p><code>SET Aussage = '...'</code>: Wir setzen die Spalte <strong>Aussage</strong> auf einen neuen Wert.</p><p><code>WHERE Name = 'Anna Schmidt'</code>: Dies ist der wichtigste Teil! Er stellt sicher, dass NUR der Eintrag für Anna Schmidt geändert wird. Ohne <code>WHERE</code> würden ALLE Aussagen geändert!</p>`
-                }
-            },
-            {
-                title: "Kapitel 5: Der entscheidende Hinweis",
-                story: `<p>Fantastisch, Anwärter! Jetzt kommt der entscheidende Schritt. Wir müssen Informationen aus <code>Verdaechtige</code> und <code>Fahrzeuge</code> kombinieren! Dafür gibt es den mächtigen <code>JOIN</code>-Befehl.</p><p class="mt-4 p-2 bg-gray-700/50 rounded-md text-yellow-300"><strong>Aufgabe:</strong> Finde den Namen des Verdächtigen, der ein rotes Auto besitzt.</p>`,
-                solutionCheck: (res) => res && res.length === 2 && res.some(r => r.Name === 'Dieter Dieb') && res.some(r => r.Name === 'Erika Mustermann'),
-                tutorial: {
-                    command: "SELECT Verdaechtige.Name, Fahrzeuge.Typ FROM Verdaechtige JOIN Fahrzeuge ON Verdaechtige.id = Fahrzeuge.Halter_ID WHERE Fahrzeuge.Farbe = 'rot';",
-                    explanation: `<p><code>SELECT Verdaechtige.Name, ...</code>: Wir wählen den Namen aus der einen und den Typ aus der anderen Tabelle aus.</p><p><code>FROM Verdaechtige JOIN Fahrzeuge</code>: Wir sagen, dass wir die Tabellen <strong>Verdaechtige</strong> und <strong>Fahrzeuge</strong> verbinden wollen.</p><p><code>ON Verdaechtige.id = Fahrzeuge.Halter_ID</code>: Das ist die "Brücke". Wir verbinden die Zeilen, bei denen die <code>id</code> des Verdächtigen mit der <code>Halter_ID</code> des Fahrzeugs übereinstimmt.</p><p><code>WHERE Fahrzeuge.Farbe = 'rot'</code>: Zum Schluss filtern wir die verbundenen Ergebnisse, um nur die roten Autos anzuzeigen.</p>`
-                }
-            },
-            {
-                title: "Fall gelöst!",
-                story: `<p class="text-2xl text-yellow-300">HERZLICHEN GLÜCKWUNSCH!</p><p>Du hast das SQL-Lernabenteuer erfolgreich abgeschlossen. Du kannst jetzt weiter mit den Datenbanken experimentieren oder das Spiel neu starten, um deine Fähigkeiten zu festigen.</p>`,
-                isEnd: true
-            }
-        ];
+            <!-- Mini-Quiz Container -->
+            <div id="quiz-box" class="mt-3 hidden">
+                <div class="p-3 bg-gray-800/50 border border-gray-700 rounded">
+                    <div id="quiz-question" class="text-sm text-gray-200 font-semibold mb-2"></div>
+                    <div id="quiz-options" class="grid gap-2"></div>
+                    <div id="quiz-feedback" class="mt-2 text-sm"></div>
+                    <div class="flex gap-2 mt-3">
+                        <button id="quiz-skip" class="py-1 px-3 rounded bg-gray-700 hover:bg-gray-600 text-sm">Überspringen</button>
+                    </div>
+                </div>
+            </div>
 
-        // --- ANWENDUNGS-LOGIK ---
-        let currentChapterIndex = 0;
-        let activeTable = Object.keys(database)[0];
+            <div class="mt-3 text-xs text-gray-400">
+                Tipp: Nutze <span class="mono">Ctrl/Cmd + Enter</span> zum Ausführen. Der "Tipp"-Knopf zeigt die Lösung und Erklärung.
+            </div>
+        </aside>
 
-        const chapterTitleEl = document.getElementById('chapter-title');
-        const storyContentEl = document.getElementById('story-content');
-        const sqlEditorEl = document.getElementById('sql-editor');
-        const runQueryBtn = document.getElementById('run-query-btn');
-        const statusMessageEl = document.getElementById('status-message');
-        const resultContentEl = document.getElementById('result-content');
-        const nextChapterBtn = document.getElementById('next-chapter-btn');
-        const dbTabsEl = document.getElementById('db-tabs');
-        const dbContentEl = document.getElementById('db-content');
+        <!-- Middle: DB & Editor -->
+        <section class="flex-1 flex flex-col gap-4 min-h-0">
+            <div class="bg-[#071425] border border-gray-700 rounded-lg p-4 flex gap-4 items-start">
+                <div class="flex-1">
+                    <h3 class="text-green-400 font-bold">Polizei-Datenbank</h3>
+                    <div id="db-tabs" class="flex gap-2 mt-2"></div>
+                </div>
+                <div class="w-1/3">
+                    <div class="text-sm text-gray-300">Schnellaktionen</div>
+                    <div class="flex gap-2 mt-2">
+                        <button id="btn-show-data" class="py-1 px-2 bg-cyan-600 rounded text-white text-sm">Daten anzeigen</button>
+                        <button id="btn-randomize" class="py-1 px-2 bg-gray-700 rounded text-sm">Zufällige Änderung</button>
+                    </div>
+                </div>
+            </div>
 
-        // NEU: Modal-Elemente
-        const tutorialModal = document.getElementById('tutorial-modal');
-        const hintBtn = document.getElementById('hint-btn');
-        const closeModalBtn = document.getElementById('close-modal-btn');
-        const tutorialCommandEl = document.getElementById('tutorial-command').querySelector('code');
-        const tutorialExplanationEl = document.getElementById('tutorial-explanation');
-        
-        function typeWriter(element, text, speed = 15) {
-            element.innerHTML = "";
-            let i = 0;
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(`<!doctype html><body>${text}`, 'text/html');
-            const allNodes = Array.from(doc.body.childNodes);
-            
-            function typeNode(nodeIndex) {
-                if (nodeIndex >= allNodes.length) return;
-                
-                const node = allNodes[nodeIndex];
-                element.appendChild(node.cloneNode(true));
-                setTimeout(() => typeNode(nodeIndex + 1), 200);
-            }
-            
-            // For simplicity, we'll just set the HTML directly. A real typewriter effect on HTML is more complex.
-            element.innerHTML = text;
+            <div class="bg-[#071425] border border-gray-700 rounded-lg p-4 min-h-0 flex flex-col">
+                <div class="flex justify-between items-center gap-2 mb-2">
+                    <h3 class="text-green-400 font-bold">SQL-Editor</h3>
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-gray-300">Highlight: CodeMirror</label>
+                    </div>
+                </div>
+
+                <div id="editor" class="cm-container rounded border border-gray-700 overflow-hidden"></div>
+
+                <div class="flex gap-2 mt-3">
+                    <button id="run-query-btn" class="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 rounded text-white font-bold">Befehl ausführen</button>
+                    <button id="explain-btn" class="py-2 px-3 bg-yellow-500 hover:bg-yellow-400 rounded text-gray-900 font-bold">Erklärungen</button>
+                </div>
+
+                <div id="status-message" class="mt-2 h-6 text-sm"></div>
+            </div>
+
+            <div class="bg-[#071425] border border-gray-700 rounded-lg p-4 overflow-auto min-h-0">
+                <h3 class="text-blue-400 font-bold mb-2">Daten (tabelle)</h3>
+                <div id="db-content" class="text-sm"></div>
+            </div>
+        </section>
+
+        <!-- Right: Result -->
+        <aside class="w-1/3 bg-[#071425] border border-gray-700 rounded-lg p-4 flex flex-col min-h-0">
+            <h3 class="text-blue-400 font-bold">Abfrage-Ergebnis</h3>
+            <div id="result-content" class="flex-1 overflow-auto mt-2"></div>
+
+            <div class="mt-3">
+                <button id="next-chapter-btn" class="w-full py-2 bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold rounded hidden">Nächstes Kapitel</button>
+            </div>
+        </aside>
+    </main>
+
+    <footer class="text-xs text-gray-400 flex justify-between">
+        <div>Made for Lernen — Interaktiv & Praxisnah</div>
+        <div id="debug-info"></div>
+    </footer>
+</div>
+
+<!-- MODALS -->
+<!-- Tutorial Modal -->
+<div id="tutorial-modal" class="fixed inset-0 hidden items-center justify-center z-50 bg-black/60 p-4">
+    <div class="bg-[#071425] border border-yellow-500 rounded-lg p-4 max-w-2xl w-full">
+        <div class="flex justify-between items-start mb-2">
+            <h4 class="text-yellow-300 font-bold">Lösung & Erklärung</h4>
+            <button id="close-tutorial" class="text-gray-300">Schließen</button>
+        </div>
+        <pre id="tutorial-command" class="mono bg-gray-900 p-3 rounded text-sm text-cyan-300 overflow-auto"></pre>
+        <div id="tutorial-explanation" class="mt-3 text-sm text-gray-200"></div>
+    </div>
+</div>
+
+<!-- Quiz Modal (optional bigger) -->
+<div id="quiz-modal" class="fixed inset-0 hidden items-center justify-center z-60 bg-black/60 p-4">
+    <div class="bg-[#071425] border border-cyan-500 rounded-lg p-4 max-w-lg w-full">
+        <div id="quiz-modal-body"></div>
+        <div class="flex justify-end mt-3">
+            <button id="close-quiz-modal" class="py-1 px-3 bg-gray-700 rounded text-sm">Schließen</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ========================
+   Datenbank & Kapitel-Setup
+   ======================== */
+
+alasql.options.mysql = true;
+
+// initial dataset (base copy)
+const baseDatabase = {
+    Zeugen: [
+        { id: 1, Name: 'Anna Schmidt', Aussage: 'Ich sah eine Person mit Hut weglaufen.' },
+        { id: 2, Name: 'Peter Müller', Aussage: 'Ein rotes Auto raste davon.' },
+        { id: 3, Name: 'Sabine Klein', Aussage: 'Es war gegen 22:00 Uhr.' }
+    ],
+    Fahrzeuge: [
+        { id: 101, Halter_ID: 201, Typ: 'Limousine', Farbe: 'blau' },
+        { id: 102, Halter_ID: 202, Typ: 'Kombi', Farbe: 'rot' },
+        { id: 103, Halter_ID: 203, Typ: 'Sportwagen', Farbe: 'schwarz' },
+        { id: 104, Halter_ID: 204, Typ: 'Kombi', Farbe: 'rot' },
+    ],
+    Verdaechtige: [
+        { id: 201, Name: 'Max Mustermann', Alibi: 'War zu Hause.' },
+        { id: 202, Name: 'Erika Mustermann', Alibi: 'War im Kino.' },
+        { id: 203, Name: 'Klaus Kleber', Alibi: 'War bei Freunden.' },
+        { id: 204, Name: 'Dieter Dieb', Alibi: 'Unbekannt.' },
+    ]
+};
+
+// helper to deep clone base db into alasql.tables
+function resetAlasqlData() {
+    Object.keys(baseDatabase).forEach(t => {
+        alasql.tables[t] = { data: JSON.parse(JSON.stringify(baseDatabase[t])) };
+    });
+}
+resetAlasqlData();
+
+/* Chapters: each chapter contains title, story (HTML), solutionCheck, tutorial, optional quiz */
+const chapters = [
+    {
+        id: 1,
+        title: "Kapitel 1: Die Grundlagen",
+        story: `<p>Willkommen bei der Sondereinheit <strong>Daten</strong>, Anwärter! Dein erster Auftrag: Verschaffe dir einen Überblick über alle Zeugen.</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Schreibe einen SQL-Befehl, der <strong>alle</strong> Daten aus der Tabelle <code>Zeugen</code> anzeigt.</p>`,
+        solutionCheck: (res, query) => {
+            return Array.isArray(res) && res.length >= 3 && res[0].Name !== undefined;
+        },
+        tutorial: {
+            command: "SELECT * FROM Zeugen;",
+            explanation: `<p><code>SELECT *</code> wählt alle Spalten. <code>FROM</code> sagt aus welcher Tabelle.</p><p>Semikolon <> beendet den Befehl (gut für Lesbarkeit).</p>`
         }
+    },
+    {
+        id: 2,
+        title: "Kapitel 2: Die Suche eingrenzen",
+        story: `<p>Ein Zeuge sprach von einem roten Fluchtauto. Verwende <code>WHERE</code>, um zu filtern.</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Finde alle Fahrzeuge, deren Farbe <strong>rot</strong> ist.</p>`,
+        solutionCheck: (res, query) => {
+            return Array.isArray(res) && res.length === 2 && res.every(r => r.Farbe === 'red' || r.Farbe === 'rot');
+        },
+        tutorial: {
+            command: "SELECT * FROM Fahrzeuge WHERE Farbe = 'rot';",
+            explanation: `<p><code>WHERE</code> filtert Zeilen. Textwerte mit einfachen Anführungszeichen.</p>`
+        },
+        // quiz example
+        quiz: {
+            question: "Welche WHERE-Anweisung findet rote Fahrzeuge?",
+            options: [
+                {txt:"SELECT * FROM Fahrzeuge WHERE Farbe = 'rot';", correct:true},
+                {txt:"SELECT * FROM Fahrzeuge WHERE Farbe = rot;", correct:false},
+                {txt:"SELECT Farbe FROM Fahrzeuge;", correct:false}
+            ],
+            hint: "Strings brauchen ' ' (einfaches Anführungszeichen)."
+        }
+    },
+    {
+        id: 3,
+        title: "Kapitel 3: Neue Spuren",
+        story: `<p>Ein neuer Zeuge 'Benno Richter' hat sich gemeldet — füge ihn ein (INSERT).</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Füge 'Benno Richter' mit seiner Aussage in die Tabelle <code>Zeugen</code> ein.</p>`,
+        solutionCheck: (res, query) => {
+            return alasql.tables.Zeugen.data.some(z => z.Name === 'Benno Richter');
+        },
+        tutorial: {
+            command: "INSERT INTO Zeugen (Name, Aussage) VALUES ('Benno Richter', 'Ich habe den Täter erkannt!');",
+            explanation: `<p><code>INSERT INTO</code> + <code>VALUES</code> fügt Zeilen ein. Reihenfolge der Spalten = Reihenfolge der Werte.</p>`
+        }
+    },
+    {
+        id: 4,
+        title: "Kapitel 4: Fehler korrigieren (UPDATE)",
+        story: `<p>Die Aussage von Anna Schmidt ist ungenau. Aktualisiere sie (UPDATE).</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Korrigiere die Aussage von 'Anna Schmidt'.</p>`,
+        solutionCheck: (res, query) => {
+            const a = alasql.tables.Zeugen.data.find(z => z.Name === 'Anna Schmidt');
+            return a && a.Aussage && a.Aussage.includes('große');
+        },
+        tutorial: {
+            command: "UPDATE Zeugen SET Aussage = 'Ich sah eine große Person mit Hut weglaufen.' WHERE Name = 'Anna Schmidt';",
+            explanation: `<p><code>UPDATE</code> ändert vorhandene Zeilen. <strong>Ohne WHERE werden alle Zeilen geändert!</strong></p>`
+        }
+    },
+    {
+        id: 5,
+        title: "Kapitel 5: JOIN — Tabellen verbinden",
+        story: `<p>Kombiniere <code>Verdaechtige</code> und <code>Fahrzeuge</code>, um Eigentümer roter Autos zu finden.</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Finde die Namen der Verdächtigen mit roten Autos.</p>`,
+        solutionCheck: (res, query) => {
+            return Array.isArray(res) && res.length >= 1 && res.some(r => r.Name && (r.Typ || r.Farbe));
+        },
+        tutorial: {
+            command: "SELECT Verdaechtige.Name, Fahrzeuge.Typ FROM Verdaechtige JOIN Fahrzeuge ON Verdaechtige.id = Fahrzeuge.Halter_ID WHERE Fahrzeuge.Farbe = 'rot';",
+            explanation: `<p><code>JOIN</code> verbindet Tabellen über eine Beziehung (ON ...).</p>`
+        }
+    },
+    {
+        id: 6,
+        title: "Kapitel 6: ORDER BY — Sortieren",
+        story: `<p>Sortiere Ergebnisse, damit die wichtigsten Einträge zuerst kommen.</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Zeige alle Verdächtigen sortiert nach Name (A–Z).</p>`,
+        solutionCheck: (res, query) => {
+            // check that ORDER BY Name present
+            return Array.isArray(res) && query && /ORDER\s+BY\s+NAME/i.test(query);
+        },
+        tutorial: {
+            command: "SELECT * FROM Verdaechtige ORDER BY Name ASC;",
+            explanation: `<p><code>ORDER BY</code> sortiert. <code>ASC</code> = aufsteigend, <code>DESC</code> = absteigend.</p>`
+        },
+        quiz: {
+            question: "Wie sortierst du absteigend nach ID?",
+            options: [
+                {txt:"SELECT * FROM Verdaechtige ORDER BY id DESC;", correct:true},
+                {txt:"SELECT * FROM Verdaechtige ORDER BY id ASC;", correct:false},
+                {txt:"SELECT * FROM Verdaechtige SORT BY id DESC;", correct:false}
+            ],
+            hint: "Das Schlüsselwort ist ORDER BY, nicht SORT BY."
+        }
+    },
+    {
+        id: 7,
+        title: "Kapitel 7: LIMIT — Ergebnisgröße begrenzen",
+        story: `<p>Begrenze die Anzahl der zurückgegebenen Zeilen mit <code>LIMIT</code>.</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Zeige nur die ersten 2 Fahrzeuge.</p>`,
+        solutionCheck: (res, query) => Array.isArray(res) && res.length === 2,
+        tutorial: {
+            command: "SELECT * FROM Fahrzeuge LIMIT 2;",
+            explanation: `<p><code>LIMIT</code> begrenzt die Ergebnisse.</p>`
+        }
+    },
+    {
+        id: 8,
+        title: "Kapitel 8: GROUP BY & COUNT — Aggregation",
+        story: `<p>Finde heraus, wie viele Fahrzeuge jede Farbe hat (GROUP BY, COUNT).</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Gruppiere Fahrzeuge nach Farbe und zähle sie.</p>`,
+        solutionCheck: (res, query) => Array.isArray(res) && res.some(r => r.Farbe || r.farbe || r.cnt || r.count),
+        tutorial: {
+            command: "SELECT Farbe, COUNT(*) AS Anzahl FROM Fahrzeuge GROUP BY Farbe;",
+            explanation: `<p><code>GROUP BY</code> fasst Zeilen zusammen. Mit Aggregatfunktionen wie <code>COUNT()</code>, <code>SUM()</code> etc. bekommst du zusammengefasste Werte.</p>`
+        }
+    },
+    {
+        id: 9,
+        title: "Kapitel 9: AND / OR — Komplexe Bedingungen",
+        story: `<p>Mit AND/OR kannst du mehrere Bedingungen kombinieren.</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Finde Fahrzeuge, die rot und Typ 'Kombi' sind.</p>`,
+        solutionCheck: (res, query) => Array.isArray(res) && query && /WHERE/i.test(query),
+        tutorial: {
+            command: "SELECT * FROM Fahrzeuge WHERE Farbe = 'rot' AND Typ = 'Kombi';",
+            explanation: `<p><code>AND</code> erfordert beide Bedingungen; <code>OR</code> mindestens eine.</p>`
+        }
+    },
+    {
+        id: 10,
+        title: "Kapitel 10: DELETE — Vorsicht beim Löschen",
+        story: `<p>Manchmal muss man Daten löschen. <strong>Achtung:</strong> DELETE entfernt Daten dauerhaft.</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Lösche testweise den Zeugen mit Namen 'Dieter Dieb' (nur zum Üben).</p>`,
+        solutionCheck: (res, query) => !alasql.tables.Zeugen.data.some(z => z.Name === 'Dieter Dieb'),
+        tutorial: {
+            command: "DELETE FROM Zeugen WHERE Name = 'Dieter Dieb';",
+            explanation: `<p><strong>Niemals</strong> löschen ohne WHERE. Testdaten kannst du löschen, aber in echten DBs vorher Backup!</p>`
+        }
+    },
+    {
+        id: 11,
+        title: "Rückblick: Gemischte Aufgaben",
+        story: `<p>Jetzt mischen wir das Gelernte. Erwartet werden verschiedene kurze Aufgaben — probiere SELECT, WHERE, JOIN oder GROUP BY.</p>
+                <p class="mt-3 text-yellow-300"><strong>Aufgabe:</strong> Löse die zufällige Übung, die dir gestellt wird.</p>`,
+        isReview: true,
+        tutorial: {
+            command: "-- Beispiel (nur beispielhaft):\\nSELECT Verdaechtige.Name, COUNT(*) FROM Verdaechtige JOIN Fahrzeuge ON Verdaechtige.id = Fahrzeuge.Halter_ID GROUP BY Verdaechtige.Name;",
+            explanation: `<p>Im Review werden mehrere Konzepte kombiniert.</p>`
+        }
+    },
+    {
+        id: 12,
+        title: "Fall gelöst!",
+        story: `<p class="text-yellow-300 font-bold text-lg">HERZLICHEN GLÜCKWUNSCH — Fall gelöst!</p>
+                <p>Du hast die Grundlagen von SQL gelernt. Wiederhole Kapitel oder probiere eigene Queries.</p>`,
+        isEnd: true
+    }
+];
 
-        function renderChapter(index) {
-            // Reset database for chapters that modify data
-            if (index >= 2) {
-                 Object.keys(database).forEach(tableName => {
-                    alasql.tables[tableName] = { data: JSON.parse(JSON.stringify(database[tableName])) };
-                });
-            }
+let currentChapterIndex = 0;
+const chapterTotal = chapters.length;
+document.getElementById('chapter-total').textContent = chapterTotal;
 
-            const chapter = chapters[index];
-            chapterTitleEl.textContent = chapter.title;
-            typeWriter(storyContentEl, chapter.story);
-            
-            sqlEditorEl.value = "";
-            statusMessageEl.innerHTML = "";
-            resultContentEl.innerHTML = `<p class="text-gray-500 italic">Das Ergebnis deiner Abfrage erscheint hier.</p>`;
-            nextChapterBtn.classList.add('hidden');
-            
-            const isEnd = !!chapter.isEnd;
-            runQueryBtn.disabled = isEnd;
-            sqlEditorEl.disabled = isEnd;
-            hintBtn.style.display = isEnd ? 'none' : 'block';
+/* ========================
+   Renderer & UI Helpers
+   ======================== */
 
-            if (isEnd) {
-                 sqlEditorEl.placeholder = "Fall gelöst!";
+const el = id => document.getElementById(id);
+
+function setStatus(msg, kind='') {
+    const el = document.getElementById('status-message');
+    el.innerHTML = msg;
+    if(kind==='ok') el.classList.add('text-green-400'); else el.classList.remove('text-green-400');
+}
+
+/* Render DB tabs */
+let activeTable = Object.keys(baseDatabase)[0];
+
+function renderDbTabs() {
+    const container = el('db-tabs');
+    container.innerHTML = '';
+    Object.keys(alasql.tables).forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = `py-1 px-3 text-sm rounded ${t===activeTable?'bg-gray-700 text-green-300':'text-gray-300 hover:bg-gray-700/50'}`;
+        btn.textContent = t;
+        btn.onclick = () => { activeTable = t; renderDbContent(); renderTabsActive(); };
+        container.appendChild(btn);
+    });
+}
+
+function renderTabsActive(){ /* just refresh visuals */ renderDbTabs(); }
+
+function renderDbContent() {
+    const data = alasql.tables[activeTable].data;
+    const container = el('db-content');
+    container.innerHTML = '';
+    if(!data || data.length===0) {
+        container.innerHTML = `<div class="text-sm text-gray-400 italic">Keine Daten.</div>`;
+        return;
+    }
+    // build table
+    const headers = Object.keys(data[0]);
+    const tbl = document.createElement('table');
+    tbl.className = 'w-full text-sm border-collapse';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr>' + headers.map(h=>`<th class="p-2 text-left text-xs font-semibold text-gray-300 border-b border-gray-700">${h}</th>`).join('') + '</tr>';
+    tbl.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    data.forEach(row => {
+        const r = document.createElement('tr');
+        r.className = 'hover:bg-gray-700/20';
+        r.innerHTML = headers.map(h=>`<td class="p-2 font-mono text-xs border-b border-gray-800 text-gray-200">${row[h] ?? ''}</td>`).join('');
+        tbody.appendChild(r);
+    });
+    tbl.appendChild(tbody);
+    container.appendChild(tbl);
+}
+
+/* render result table for SELECT results */
+function renderResult(res) {
+    const container = el('result-content');
+    container.innerHTML = '';
+    if(!res) { container.innerHTML = '<div class="text-gray-400 italic">Keine Ausgabe.</div>'; return; }
+    if(Array.isArray(res) && res.length>0 && typeof res[0] === 'object') {
+        // table mode
+        const headers = Object.keys(res[0]);
+        const tbl = document.createElement('table');
+        tbl.className = 'w-full text-sm border-collapse';
+        const thead = document.createElement('thead');
+        thead.innerHTML = '<tr>' + headers.map(h=>`<th class="p-2 text-left text-xs font-semibold text-gray-300 border-b border-gray-700">${h}</th>`).join('') + '</tr>';
+        tbl.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        res.forEach(row => {
+            const r = document.createElement('tr');
+            r.className = 'hover:bg-gray-700/20';
+            r.innerHTML = headers.map(h=>`<td class="p-2 font-mono text-xs border-b border-gray-800 text-gray-200">${row[h] ?? ''}</td>`).join('');
+            tbody.appendChild(r);
+        });
+        tbl.appendChild(tbody);
+        container.appendChild(tbl);
+    } else {
+        // raw output
+        const pre = document.createElement('pre');
+        pre.className = 'mono text-sm text-gray-200';
+        pre.textContent = JSON.stringify(res, null, 2);
+        container.appendChild(pre);
+    }
+}
+
+/* ========================
+   CodeMirror Editor Setup
+   ======================== */
+
+let editorView;
+(async function initEditor(){
+    const {EditorView, basicSetup} = window["@codemirror/basic-setup"];
+    const {sql} = window["@codemirror/lang-sql"];
+    const {EditorState} = window["@codemirror/state"];
+    const {defaultKeymap} = window["@codemirror/commands"];
+
+    const startDoc = "-- Schreibe deinen SQL-Befehl hier...\nSELECT * FROM Zeugen;";
+
+    editorView = new EditorView({
+        state: EditorState.create({
+            doc: startDoc,
+            extensions: [
+                basicSetup,
+                sql(),
+                EditorView.theme({
+                    '&': {backgroundColor: '#0b1220', color: '#e6eef8'},
+                    '.cm-content': {fontFamily: 'Fira Code, monospace', fontSize: '13px'},
+                }),
+                EditorView.updateListener.of(u => {
+                    // detect Ctrl/Cmd+Enter manually? We'll use keymap later
+                })
+            ]
+        }),
+        parent: document.getElementById('editor')
+    });
+
+    // handle Ctrl/Cmd + Enter
+    document.addEventListener('keydown', (e)=> {
+        if((e.ctrlKey||e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            runCurrentQuery();
+        }
+    });
+})();
+
+/* ========================
+   Chapter Flow
+   ======================== */
+
+function renderChapter(index) {
+    if(index < 0) index = 0;
+    if(index >= chapters.length) index = chapters.length-1;
+    currentChapterIndex = index;
+    const c = chapters[index];
+
+    el('chapter-number').textContent = index+1;
+    el('chapter-title').textContent = c.title;
+    el('chapter-title-small').textContent = c.title;
+    el('story-panel').innerHTML = c.story;
+
+    // progress bar
+    const pct = Math.round(((index) / (chapters.length-1)) * 100);
+    el('progress-bar').style.width = pct + '%';
+
+    // placeholder in editor
+    if(editorView) {
+        // clear selection, set sample if provided
+        const sample = c.tutorial?.command ?? "";
+        editorView.dispatch({
+            changes: {from: 0, to: editorView.state.doc.length, insert: sample}
+        });
+    }
+    // UI: quiz show/hide
+    if(c.quiz) showQuizInline(c.quiz); else hideQuizInline();
+
+    // show/hide next chapter button
+    el('next-chapter-btn').classList.add('hidden');
+
+    // update DB view
+    renderDbTabs();
+    renderDbContent();
+
+    // update hint modal content if available
+    // (handled in hint button event)
+}
+
+/* ========================
+   Quiz: inline & modal
+   ======================== */
+
+function showQuizInline(quiz) {
+    el('quiz-box').classList.remove('hidden');
+    el('quiz-question').innerHTML = quiz.question;
+    const opts = el('quiz-options');
+    opts.innerHTML = '';
+    quiz.options.forEach((o,i) => {
+        const div = document.createElement('div');
+        div.className = 'quiz-opt p-2 rounded text-sm text-gray-200 quiz-option';
+        div.textContent = o.txt;
+        div.onclick = () => {
+            if(o.correct) {
+                el('quiz-feedback').innerHTML = `<span class="text-green-400 font-bold">Richtig!</span>`;
             } else {
-                 sqlEditorEl.placeholder = "Schreibe deinen SQL-Befehl hier...";
+                el('quiz-feedback').innerHTML = `<span class="text-red-400">Falsch — Tipp: ${quiz.hint || 'Überprüfe die Syntax.'}</span>`;
             }
-            
-            renderDbTabs();
+        };
+        opts.appendChild(div);
+    });
+    el('quiz-feedback').innerHTML = '';
+}
+
+function hideQuizInline() {
+    el('quiz-box').classList.add('hidden');
+}
+
+/* ========================
+   Run & Validation
+   ======================== */
+
+function runCurrentQuery() {
+    setStatus('', '');
+    const query = editorView ? editorView.state.doc.toString().trim() : '';
+    if(!query) return;
+    try {
+        const res = alasql(query);
+
+        // show results
+        if(query.trim().toUpperCase().startsWith('SELECT')) {
+            renderResult(res);
+        } else {
+            // mutation - re-render DB
+            renderResult(["Befehl ausgeführt."]);
             renderDbContent();
         }
-        
-        function renderDbTabs() {
-            dbTabsEl.innerHTML = '';
-            Object.keys(database).forEach(tableName => {
-                const isActive = tableName === activeTable;
-                const tab = document.createElement('button');
-                tab.textContent = tableName;
-                tab.className = `px-4 py-1 text-sm font-semibold rounded-t-md transition-colors ${isActive ? 'bg-gray-700 text-green-400' : 'text-gray-400 hover:bg-gray-700/50'}`;
-                tab.onclick = () => {
-                    activeTable = tableName;
-                    renderDbTabs();
-                    renderDbContent();
-                };
-                dbTabsEl.appendChild(tab);
-            });
+
+        // check solution for chapter
+        const chapter = chapters[currentChapterIndex];
+        let solved = false;
+        try {
+            if(chapter.solutionCheck) solved = chapter.solutionCheck(res, query);
+            // if review, do some random checks
+            if(chapter.isReview) solved = true; // accept any successful query for review
+        } catch(e) {
+            solved = false;
+            console.error(e);
         }
 
-        function renderDbContent() {
-            const data = alasql.tables[activeTable].data;
-            renderTable(data, dbContentEl);
+        if(solved) {
+            setStatus('Erfolg! Das Kapitel ist bestanden. Du kannst zum nächsten Kapitel.', 'ok');
+            el('next-chapter-btn').classList.remove('hidden');
+        } else {
+            setStatus('Das Ergebnis ist nicht ganz richtig. Probiere einen Tipp oder versuche es erneut.');
         }
 
-        function renderTable(data, element) {
-            if (!data || data.length === 0) {
-                element.innerHTML = `<p class="text-gray-500 italic">Keine Daten zum Anzeigen.</p>`;
-                return;
-            }
+    } catch (err) {
+        setStatus(`Fehler: ${err.message}`);
+        el('result-content').innerHTML = `<pre class="mono text-sm text-red-400">${err.message}</pre>`;
+    }
+}
 
-            const headers = Object.keys(data[0]);
-            const table = document.createElement('table');
-            table.className = 'w-full text-left border-collapse';
+/* ========================
+   Events & Buttons
+   ======================== */
 
-            const thead = table.createTHead();
-            thead.className = "bg-gray-700/50";
-            const headerRow = thead.insertRow();
-            headers.forEach(headerText => {
-                const th = document.createElement('th');
-                th.className = 'p-2 border-b border-gray-600 font-bold';
-                th.textContent = headerText;
-                headerRow.appendChild(th);
-            });
-
-            const tbody = table.createTBody();
-            data.forEach(rowData => {
-                const row = tbody.insertRow();
-                row.className = "hover:bg-gray-700/30";
-                headers.forEach(header => {
-                    const cell = row.insertCell();
-                    cell.className = 'p-2 border-b border-gray-600 font-mono';
-                    cell.textContent = rowData[header];
-                });
-            });
-
-            element.innerHTML = '';
-            element.appendChild(table);
-        }
-
-        function handleRunQuery() {
-            const query = sqlEditorEl.value.trim();
-            if (!query) return;
-
-            statusMessageEl.innerHTML = "";
-            const chapter = chapters[currentChapterIndex];
-
-            try {
-                const res = alasql(query);
-                
-                if (query.toUpperCase().startsWith('SELECT')) {
-                    renderTable(res, resultContentEl);
-                } else {
-                    resultContentEl.innerHTML = `<p class="text-green-400">Befehl erfolgreich ausgeführt.</p>`;
-                    renderDbContent();
-                }
-
-                if (chapter.solutionCheck(res, query)) {
-                    statusMessageEl.innerHTML = `<span class="text-green-400 font-bold">Erfolg! Das war der richtige Hinweis.</span>`;
-                    nextChapterBtn.classList.remove('hidden');
-                } else {
-                    statusMessageEl.innerHTML = `<span class="text-yellow-400">Das Ergebnis ist nicht ganz richtig. Versuche es erneut.</span>`;
-                }
-
-            } catch (e) {
-                statusMessageEl.innerHTML = `<span class="text-red-400 font-bold">Fehler!</span>`;
-                resultContentEl.innerHTML = `<p class="text-red-400 font-mono">${e.message}</p>`;
-            }
-        }
-        
-        // NEU: Modal-Logik
-        function showTutorial() {
-            const chapter = chapters[currentChapterIndex];
-            if (chapter && chapter.tutorial) {
-                tutorialCommandEl.textContent = chapter.tutorial.command;
-                tutorialExplanationEl.innerHTML = chapter.tutorial.explanation;
-                tutorialModal.classList.remove('hidden');
-            }
-        }
-        
-        function hideTutorial() {
-            tutorialModal.classList.add('hidden');
-        }
-
-        hintBtn.addEventListener('click', showTutorial);
-        closeModalBtn.addEventListener('click', hideTutorial);
-        tutorialModal.addEventListener('click', (e) => {
-            if (e.target === tutorialModal) {
-                hideTutorial();
-            }
-        });
-
-        runQueryBtn.addEventListener('click', handleRunQuery);
-        sqlEditorEl.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                handleRunQuery();
-            }
-        });
-
-        nextChapterBtn.addEventListener('click', () => {
-            if (currentChapterIndex < chapters.length - 1) {
-                currentChapterIndex++;
-                renderChapter(currentChapterIndex);
-            }
-        });
-
-        // Initialisierung
+el('run-query-btn').addEventListener('click', runCurrentQuery);
+el('next-chapter-btn').addEventListener('click', ()=> {
+    if(currentChapterIndex < chapters.length-1) {
+        currentChapterIndex++;
         renderChapter(currentChapterIndex);
+    }
+});
+el('hint-btn').addEventListener('click', ()=> {
+    const c = chapters[currentChapterIndex];
+    if(!c || !c.tutorial) return;
+    el('tutorial-command').textContent = c.tutorial.command || '';
+    el('tutorial-explanation').innerHTML = c.tutorial.explanation || '';
+    el('tutorial-modal').classList.remove('hidden');
+});
+el('close-tutorial').addEventListener('click', ()=> el('tutorial-modal').classList.add('hidden'));
 
-    </script>
+el('reset-btn').addEventListener('click', ()=> {
+    if(confirm('Datenbank zurücksetzen und von vorne beginnen?')) {
+        resetAlasqlData();
+        renderDbTabs();
+        renderDbContent();
+        renderChapter(0);
+        setStatus('Neu gestartet.');
+    }
+});
+
+el('btn-show-data').addEventListener('click', ()=> {
+    renderDbContent();
+    setStatus('Daten angezeigt.');
+});
+el('btn-randomize').addEventListener('click', ()=> {
+    // tiny random mutation for practice
+    const v = alasql.tables.Fahrzeuge.data;
+    if(v && v.length>0) {
+        const i = Math.floor(Math.random()*v.length);
+        v[i].Farbe = v[i].Farbe === 'rot' ? 'blau' : 'rot';
+        renderDbContent();
+        setStatus('Zufällige Änderung vorgenommen.');
+    }
+});
+
+/* Keyboard: also allow Enter in editor? handled via Ctrl+Enter earlier. */
+
+/* ========================
+   Dark/Light Toggle
+   ======================== */
+
+el('toggle-mode').addEventListener('change', (e)=>{
+    const checked = e.target.checked;
+    if(checked) {
+        document.documentElement.style.background = '#f8fafc';
+        document.body.style.color = '#0b1220';
+        // small visual flip: (not comprehensive)
+        document.querySelectorAll('.bg-[#071425]').forEach(n=>n.style.backgroundColor='#ffffff');
+    } else {
+        document.documentElement.style.background = '';
+        document.body.style.color = '';
+        document.querySelectorAll('.bg-[#071425]').forEach(n=>n.style.backgroundColor='');
+    }
+});
+
+/* ========================
+   Init & utilities
+   ======================== */
+
+function init() {
+    renderChapter(currentChapterIndex);
+    renderDbTabs();
+    renderDbContent();
+    el('chapter-total').textContent = chapters.length;
+    // set debug
+    el('debug-info').textContent = `Kapitel ${currentChapterIndex+1}/${chapters.length}`;
+}
+
+init();
+
+/* Optional: adjust solution checks that expect 'rot' to account for english 'red' if used */
+function normalizeFarbeValue() {
+    // convert any 'red' occurrences to 'rot' for consistent checks
+    alasql.tables.Fahrzeuge.data.forEach(f=>{
+        if(f.Farbe && f.Farbe.toLowerCase() === 'red') f.Farbe = 'rot';
+    });
+}
+normalizeFarbeValue();
+
+/* Tiny safety: autosave DB to localStorage (so progress persists) */
+(function autosave() {
+    const key = 'lern-sql-db-v2';
+    // load if exists
+    try {
+        const saved = localStorage.getItem(key);
+        if(saved) {
+            const parsed = JSON.parse(saved);
+            if(parsed && typeof parsed === 'object') {
+                Object.keys(parsed).forEach(t => { if(alasql.tables[t]) alasql.tables[t].data = parsed[t]; });
+            }
+        }
+    } catch(e){}
+    // save on unload
+    window.addEventListener('beforeunload', ()=>{
+        try {
+            const out = {};
+            Object.keys(alasql.tables).forEach(t => out[t] = alasql.tables[t].data);
+            localStorage.setItem(key, JSON.stringify(out));
+        } catch(e){}
+    });
+})();
+
+</script>
 </body>
 </html>
