@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Manager Pro</title>
+
+    <!-- externe Bibliotheken (bleiben im HEAD) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+
+    <!-- lokales CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">🗄️ Database Manager Pro</div>
+            <div class="header-actions">
+                <button class="btn" onclick="openImportModal()">📁 Import</button>
+                <button class="btn" onclick="exportData()">💾 Export</button>
+                <button class="btn btn-primary" onclick="createNewTable()">➕ New Table</button>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <input type="text" class="search-box" placeholder="Search..." onkeyup="filterTables(this.value)">
+            </div>
+            <div class="tree-view" id="treeView">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading database...</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('table-view')">📊 Table View</div>
+                <div class="tab" onclick="switchTab('er-diagram')">🔗 ER Diagram</div>
+            </div>
+            
+            <div class="tab-content">
+                <div class="tab-pane active" id="table-view">
+                    <div class="table-container">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Select a table to view data</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-pane" id="er-diagram">
+                    <div class="er-diagram">
+                        <div class="er-canvas" id="erCanvas">
+                            <!-- SVG overlay for foreign key connections -->
+                            <svg class="er-svg-overlay" id="erSvgOverlay"></svg>
+                            <!-- Table cards will be dynamically inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-bar" id="statusBar">
+                Ready - No database loaded
+            </div>
+        </main>
+
+        <!-- SQL Editor Panel -->
+        <aside class="sql-editor-panel">
+            <div class="sql-editor-header">
+                <span>📝 SQL Editor</span>
+            </div>
+            <div class="sql-editor-content">
+                <div class="sql-editor-buttons">
+                    <button class="btn btn-primary" onclick="executeSql()">▶️ Execute</button>
+                    <button class="btn" onclick="clearSqlEditor()">🗑️ Clear</button>
+                    <button class="btn" onclick="loadSqlTemplate()">📝 Template</button>
+                    <button class="btn" onclick="exportSqlQuery()">💾 Save</button>
+                </div>
+                <textarea id="sqlEditor" placeholder="-- Enter your SQL query here
+-- Examples:
+-- SELECT * FROM table_name;
+-- CREATE TABLE example (id INTEGER PRIMARY KEY, name TEXT);
+-- INSERT INTO example (name) VALUES ('Sample');"></textarea>
+                <div id="sqlResults" class="sql-results"></div>
+            </div>
+        </aside>
+
+        <!-- Properties Panel -->
+        <aside class="properties-panel">
+            <div class="properties-header">Properties</div>
+            <div class="properties-content" id="propertiesContent">
+                <div class="property-group">
+                    <div class="property-label">Name</div>
+                    <input type="text" class="property-value" placeholder="No selection">
+                </div>
+                <div class="property-group">
+                    <div class="property-label">Type</div>
+                    <input type="text" class="property-value" placeholder="No selection">
+                </div>
+                <div class="property-group">
+                    <div class="property-label">Details</div>
+                    <textarea class="property-value" rows="4" placeholder="No selection"></textarea>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Import Database</h3>
+            </div>
+            <div class="file-drop-zone" onclick="document.getElementById('fileInput').click()">
+                <p>📁 Click to select or drag & drop files</p>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">
+                    Supported: .db, .sqlite, .sqlite3, .sql, .csv, .json
+                </p>
+            </div>
+            <input type="file" id="fileInput" class="hidden" accept=".db,.sqlite,.sqlite3,.sql,.csv,.json" onchange="handleFileSelect(this.files)">
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn" onclick="closeImportModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SQL Template Modal -->
+    <div class="modal-overlay" id="templateModal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="modal-title">📝 SQL Templates</h3>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 20px 0;">
+                <button class="template-btn" onclick="insertTemplate('create-table')">
+                    <strong>CREATE TABLE</strong>
+                    <small>Create a new table</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('drop-table')">
+                    <strong>DROP TABLE</strong>
+                    <small>Delete a table</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('insert')">
+                    <strong>INSERT INTO</strong>
+                    <small>Add new rows</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('select')">
+                    <strong>SELECT</strong>
+                    <small>Query data</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('update')">
+                    <strong>UPDATE</strong>
+                    <small>Modify existing rows</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('delete')">
+                    <strong>DELETE</strong>
+                    <small>Remove rows</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('alter-table')">
+                    <strong>ALTER TABLE</strong>
+                    <small>Modify table structure</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('create-index')">
+                    <strong>CREATE INDEX</strong>
+                    <small>Add database index</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('join')">
+                    <strong>JOIN</strong>
+                    <small>Combine tables</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('view')">
+                    <strong>CREATE VIEW</strong>
+                    <small>Create virtual table</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('trigger')">
+                    <strong>CREATE TRIGGER</strong>
+                    <small>Add database trigger</small>
+                </button>
+                <button class="template-btn" onclick="insertTemplate('aggregate')">
+                    <strong>AGGREGATE</strong>
+                    <small>COUNT, SUM, AVG, etc.</small>
+                </button>
+            </div>
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn" onclick="closeTemplateModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- lokales JS -->
+    <script src="app.js"></script>
+</body>
+</html>
