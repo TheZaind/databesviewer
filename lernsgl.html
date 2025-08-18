@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SQL Quest — Datenburg Edition</title>
+  <style>
+    :root{
+      --bg:#0a0a0a;--layer:#101010;--card:#131313;--ink:#f5f5f5;--muted:#bdbdbd;--line:#2a2a2a;--accent:#ffffff;--good:#89ff9a;--bad:#ff6b6b;--gold:#ffd166
+    }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+    /* --- Top Bar --- */
+  .bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#000;border-bottom:2px solid var(--line)}
+  .brand{display:flex;gap:12px;align-items:center}
+  .logo{width:26px;height:26px;border:2px solid var(--ink);border-radius:8px}
+  .title{letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+  .stats{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .chip{display:flex;align-items:center;gap:10px;border:2px solid var(--line);background:var(--card);padding:10px 12px;border-radius:12px}
+  .lvlbar{position:relative;width:160px;height:12px;border:2px solid var(--line);border-radius:10px;background:#000;overflow:hidden}
+  .lvlbar>div{position:absolute;inset:0 0 0 0;transform-origin:left;transform:scaleX(0);background:var(--accent)}
+
+    /* --- Layout --- */
+  .layout{display:grid;grid-template-columns:280px 1fr 320px;gap:18px;max-width:1200px;margin:18px auto;padding:20px}
+  @media (max-width:1024px){.layout{grid-template-columns:1fr;padding:12px}}
+
+    /* --- Panels --- */
+  .panel{background:var(--layer);border:2px solid var(--line);border-radius:16px;padding:18px}
+  h2{margin:0 0 12px 0;font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+  .nav button{width:100%;text-align:left;background:#000;border:2px solid var(--line);color:var(--ink);padding:12px;border-radius:12px;margin-bottom:10px;cursor:pointer;font-weight:600}
+  .nav button.active{outline:3px solid var(--accent)}
+
+    /* --- Story --- */
+  .story{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,0.35)}
+  .story .chapter{color:var(--gold);font-weight:700;font-size:14px}
+  .typewriter{overflow:hidden;white-space:nowrap;animation:tw 2.2s steps(40,end);display:block;margin-top:6px}
+    @keyframes tw{from{width:0}to{width:100%}}
+
+    /* --- Lesson --- */
+  .lesson{display:grid;gap:14px}
+  .teach{background:#0e0e0e;border:2px solid var(--line);border-radius:12px;padding:18px}
+  .teach .small{margin:0;padding-left:6px}
+  .code{background:#000;color:#9ef99a;border:2px solid var(--line);border-radius:12px;padding:14px;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .task{background:#0e0e0e;border:2px dashed var(--line);border-radius:12px;padding:16px;margin-top:8px}
+  .editor{display:flex;gap:12px;align-items:stretch;margin-top:8px}
+  .editor input{flex:1;background:#000;border:2px solid var(--line);color:var(--ink);padding:12px 14px;border-radius:12px;outline:none}
+  .btn{background:var(--accent);color:#000;border:none;padding:12px 14px;border-radius:12px;font-weight:800;cursor:pointer;box-shadow:0 6px 14px rgba(0,0,0,0.5)}
+  .btn.ghost{background:#000;color:var(--ink);border:2px solid var(--line)}
+  .btn:active{transform:translateY(1px)}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+  .feedback{min-height:28px;margin-top:6px}
+
+    /* --- Schema --- */
+    .schema details{border:2px solid var(--line);border-radius:12px;margin-bottom:8px}
+    .schema summary{padding:8px;background:#000;cursor:pointer}
+    .schema .cols{padding:8px}
+
+    /* --- Animations & FX --- */
+    .fadeIn{animation:fade .35s ease both}
+    .slideUp{animation:up .35s ease both}
+    @keyframes fade{from{opacity:0}to{opacity:1}}
+    @keyframes up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    .toast{position:fixed;right:16px;bottom:16px;background:#000;border:2px solid var(--line);padding:12px 14px;border-radius:12px;display:none}
+    .confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+
+    /* --- Micro --- */
+    .kbd{border:1px solid var(--line);padding:2px 6px;border-radius:6px;background:#111}
+    .muted{color:var(--muted)}
+  .small{font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div class="brand">
+      <div class="logo"></div>
+      <div class="title">SQL Quest — Datenburg</div>
+    </div>
+    <div class="stats">
+      <div class="chip">XP: <strong id="xp">0</strong></div>
+      <div class="chip">Level <strong id="lvl">1</strong>
+        <div class="lvlbar" title="Fortschritt zum nächsten Level">
+          <div id="lvlfill"></div>
+        </div>
+      </div>
+      <div class="chip">Streak: <strong id="streak">0</strong> 🔥</div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- LEFT: Chapters -->
+    <aside class="panel">
+      <h2>Kapitel</h2>
+      <div id="nav" class="nav"></div>
+      <div class="small muted" style="margin-top:8px">
+        <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> Ausführen • <span class="kbd">←</span>/<span class="kbd">→</span> Step
+      </div>
+    </aside>
+
+    <!-- CENTER: Lesson Content -->
+    <main class="panel">
+      <div id="story" class="story fadeIn">
+        <div class="chapter" id="chapterTitle">Prolog</div>
+        <div id="storyText" class="typewriter">Willkommen, Rekrut. Vor dir liegt die Datenburg. Beherrsche die Artefakte der SQL-Kunst, um ihre Tore zu öffnen.</div>
+      </div>
+      <section id="lesson" class="lesson"></section>
+      <div class="feedback small muted" id="feedback"></div>
+    </main>
+
+    <!-- RIGHT: Schema & Docs -->
+    <aside class="panel">
+      <h2>Schema</h2>
+      <div id="schema" class="schema small"></div>
+      <h2>Hinweise</h2>
+      <div class="small muted" id="tips">Klicke „Hinweis“, um stufenweise Unterstützung zu erhalten. Zeige die Lösung nur, wenn du festhängst.</div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="confetti" id="confetti"></div>
+
+  <script>
+  // ---------- Data & State ----------
+  const STORAGE_KEY = 'sqlquest-v2';
+  const state = loadState();
+  const XP_PER_STEP = 12;
+  const LEVEL_STEP = 60; // xp per level
+
+  const schema = {
+    customers:["id INTEGER PK","name TEXT","city TEXT"],
+    products:["id INTEGER PK","name TEXT","category TEXT","price NUMERIC"],
+    orders:["id INTEGER PK","customer_id INTEGER → customers.id","created_at DATE"],
+    order_items:["order_id INTEGER → orders.id","product_id INTEGER → products.id","qty INTEGER","price NUMERIC"]
+  };
+
+  const chapters = [
+    {
+      id:'c1', title:'Halle der Auswahl', story:'Der Archivarius gibt dir Zugriff auf die Regale — aber nur, wenn du lesen kannst, was dort steht.',
+      steps:[
+        sTeach({
+          teach:[
+            'Eine Abfrage hat die Grundform: <code>SELECT &lt;spalten&gt; FROM &lt;tabelle&gt;</code>.',
+            'Mit <code>*</code> wählst du alle Spalten.',
+          ],
+          example:'SELECT <columns> FROM <table>;',
+          task:"Wähle alle Spalten der Tabelle <code>products</code>.",
+          answers:[/^SELECT\s+\*\s+FROM\s+products\s*;?$/i],
+          hints:['Nutze <code>*</code> für alle Spalten.','Vergiss das <code>FROM</code> nicht.']
+        }),
+        sTeach({
+          teach:[
+            'Statt <code>*</code> kannst du einzelne Spalten wählen (Komma-getrennt).'
+          ],
+          example:'SELECT <spalte1>, <spalte2> FROM <table>;',
+          task:'Wähle nur die Spalten <code>name</code> und <code>price</code> aus <code>products</code>.',
+          answers:[/^SELECT\s+name\s*,\s*price\s+FROM\s+products\s*;?$/i],
+          hints:['Schreibe die Spalten in der SELECT-Liste.','Reihenfolge: name, dann price.']
+        }),
+        sTeach({
+          teach:['Du kannst Ergebnisse begrenzen: <code>LIMIT n</code>.'],
+          example:'SELECT <columns> FROM <table> LIMIT <n>;',
+          task:'Wähle <code>*</code> aus <code>products</code>, aber nur die ersten <code>2</code> Zeilen.',
+          answers:[/^SELECT\s+\*\s+FROM\s+products\s+LIMIT\s+2\s*;?$/i],
+          hints:['Hänge <code>LIMIT 2</code> ans Ende.']
+        })
+      ]
+    },
+    {
+      id:'c2', title:'Kammer der Ordnung', story:'Die Regale sind hoch. Sortiere sie, damit du findest, was du brauchst.',
+      steps:[
+        sTeach({
+          teach:['Sortieren mit <code>ORDER BY spalte ASC|DESC</code>. ASC = aufsteigend.'],
+          example:'SELECT <columns> FROM <table> ORDER BY <spalte> ASC;',
+          task:'Wähle <code>name</code> aus <code>products</code> und sortiere aufsteigend nach <code>name</code>.',
+          answers:[/^SELECT\s+name\s+FROM\s+products\s+ORDER\s+BY\s+name(\s+ASC)?\s*;?$/i],
+          hints:['<code>ORDER BY name</code> ans Ende.']
+        }),
+        sTeach({
+          teach:['Mehrere Sortierspalten sind möglich. DESC = absteigend.'],
+          example:'ORDER BY <a> DESC, <b> ASC',
+          task:'Wähle <code>*</code> aus <code>products</code> und sortiere nach <code>price</code> absteigend.',
+          answers:[/^SELECT\s+\*\s+FROM\s+products\s+ORDER\s+BY\s+price\s+DESC\s*;?$/i],
+          hints:['Nutze <code>DESC</code>.']
+        })
+      ]
+    },
+    {
+      id:'c3', title:'Halle der Bedingungen', story:'Nicht alles ist relevant. Lerne zu filtern, Rekrut.',
+      steps:[
+        sTeach({
+          teach:['Filtern mit <code>WHERE</code> und Vergleich: =, &gt;, &lt;, BETWEEN, IN, LIKE.'],
+          example:"... WHERE <spalte> = 'Wert'",
+          task:"Wähle <code>*</code> aus <code>products</code>, wo <code>category = 'Accessories'</code>.",
+          answers:[/^SELECT\s+\*\s+FROM\s+products\s+WHERE\s+category\s*=\s*'Accessories'\s*;?$/i],
+          hints:['Setze den Filter nach <code>FROM</code>.','Strings in einfachen Anführungszeichen.']
+        }),
+        sTeach({
+          teach:['Kombiniere Bedingungen mit <code>AND</code>/<code>OR</code>.'],
+          example:"... WHERE <a> = 1 AND <b> &gt; 0",
+          task:"Wähle <code>*</code> aus <code>products</code> für <code>category='Accessories'</code> und <code>price &gt; 20</code>.",
+          answers:[/^SELECT\s+\*\s+FROM\s+products\s+WHERE\s+category\s*=\s*'Accessories'\s+AND\s+price\s*>\s*20\s*;?$/i],
+          hints:['AND zwischen die zwei Bedingungen setzen.']
+        }),
+        sTeach({
+          teach:['Nur eindeutige Werte: <code>DISTINCT</code>.'],
+          example:'SELECT DISTINCT <spalte> FROM <table>;',
+          task:'Gib alle unterschiedlichen <code>category</code>-Werte aus <code>products</code> aus.',
+          answers:[/^SELECT\s+DISTINCT\s+category\s+FROM\s+products\s*;?$/i],
+          hints:['<code>DISTINCT</code> steht direkt nach SELECT.']
+        })
+      ]
+    },
+    {
+      id:'c4', title:'Saal der Zählung', story:'Zähle, miss, gruppiere — der Haushofmeister liebt Zahlen.',
+      steps:[
+        sTeach({
+          teach:['Aggregatfunktionen: <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>.'],
+          example:'SELECT COUNT(*) FROM <table>;',
+          task:'Zähle alle Zeilen in <code>products</code>.',
+          answers:[/^SELECT\s+COUNT\(\*\)\s+FROM\s+products\s*;?$/i],
+          hints:['Nutze <code>COUNT(*)</code>.']
+        }),
+        sTeach({
+          teach:['Gruppieren mit <code>GROUP BY</code>.'],
+          example:'SELECT <spalte>, COUNT(*) FROM <table> GROUP BY <spalte>;',
+          task:'Zähle Produkte pro <code>category</code> in <code>products</code>.',
+          answers:[/^SELECT\s+category\s*,\s*COUNT\(\*\)\s+FROM\s+products\s+GROUP\s+BY\s+category\s*;?$/i],
+          hints:['Die Gruppenspalte muss in SELECT und GROUP BY stehen.']
+        }),
+        sTeach({
+          teach:['Gruppen filtern mit <code>HAVING</code> (nach der Aggregation).'],
+          example:'... GROUP BY <x> HAVING COUNT(*) &gt; 1',
+          task:'Zeige nur Kategorien mit mehr als 1 Produkt.',
+          answers:[/^SELECT\s+category\s*,\s*COUNT\(\*\)\s+FROM\s+products\s+GROUP\s+BY\s+category\s+HAVING\s+COUNT\(\*\)\s*>\s*1\s*;?$/i],
+          hints:['<code>HAVING</code> kommt nach <code>GROUP BY</code>.']
+        })
+      ]
+    },
+    {
+      id:'c5', title:'Brücke der Verbindungen', story:'Über die Brücke verbindest du Tabellen. Tritt sicher, sonst stürzt du.',
+      steps:[
+        sTeach({
+          teach:['Verbinde Tabellen mit <code>JOIN</code> und einer ON-Bedingung.'],
+          example:'SELECT ... FROM A JOIN B ON A.key = B.key',
+          task:'Wähle <code>c.name</code> und <code>o.id</code> aus <code>customers c</code> und <code>orders o</code> per Join (<code>c.id = o.customer_id</code>).',
+          answers:[/^SELECT\s+c\.name\s*,\s*o\.id\s+FROM\s+customers\s+c\s+JOIN\s+orders\s+o\s+ON\s+c\.id\s*=\s*o\.customer_id\s*;?$/i],
+          hints:['Nutze Aliasse <code>c</code> und <code>o</code>.','ON-Bedingung verbindet Schlüssel.']
+        }),
+        sTeach({
+          teach:['Linke Verbindungen zeigen auch nicht passende linke Zeilen: <code>LEFT JOIN</code>.'],
+          example:'SELECT ... FROM L LEFT JOIN R ON ...',
+          task:'Liste alle <code>c.name</code> mit optionaler Bestell-ID (<code>o.id</code>) via <code>LEFT JOIN</code>.',
+          answers:[/^SELECT\s+c\.name\s*,\s*o\.id\s+FROM\s+customers\s+c\s+LEFT\s+JOIN\s+orders\s+o\s+ON\s+c\.id\s*=\s*o\.customer_id\s*;?$/i],
+          hints:['Ersetze JOIN durch <code>LEFT JOIN</code>.']
+        })
+      ]
+    },
+    {
+      id:'c6', title:'Krypta des Umsatzes', story:'Beweise deinen Wert: finde den Schatz im Zahlenwerk.',
+      steps:[
+        sTeach({
+          teach:['Aggregiere über mehrere Tabellen.','Multipliziere Menge * Preis und summiere.'],
+          example:'SELECT p.name, SUM(oi.qty*oi.price) AS revenue\nFROM order_items oi JOIN products p ON p.id=oi.product_id\nGROUP BY p.name',
+          task:'Summiere Umsatz pro Produktname (<code>revenue</code>).',
+          answers:[/^SELECT\s+p\.name\s*,\s*SUM\(\s*oi\.qty\s*\*\s*oi\.price\s*\)\s+AS\s+revenue\s+FROM\s+order_items\s+oi\s+JOIN\s+products\s+p\s+ON\s+p\.id\s*=\s*oi\.product_id\s+GROUP\s+BY\s+p\.name\s*;?$/i],
+          hints:['JOIN über <code>product_id</code>.','<code>SUM(qty*price)</code> als revenue.']
+        })
+      ]
+    }
+  ];
+
+    // --- Erweiterte Kapitel (neu) ---
+    chapters.push(
+      {
+        id:'c7', title:'Höhle der CTEs', story:'Manchmal macht es Sinn, Zwischenergebnisse sauber zu benennen — die CTE (WITH) ist dein Werkzeug dafür.',
+        steps:[
+          sTeach({
+            teach:['Common Table Expressions (CTE) beginnen mit <code>WITH</code>. Sie helfen, komplexe Abfragen zu strukturieren.'],
+            example:'WITH temp AS (SELECT ... ) SELECT ... FROM temp;',
+            task:'Erstelle eine CTE namens <code>high</code>, die Produkte mit <code>price &gt; 20</code> enthält, und gib dann deren <code>name</code> aus.',
+            answers:[/^WITH\s+high\s+AS\s*\(\s*SELECT\s+\*\s+FROM\s+products\s+WHERE\s+price\s*>\s*20\s*\)\s+SELECT\s+name\s+FROM\s+high\s*;?$/i],
+            hints:['Beginne mit <code>WITH high AS (SELECT * FROM products WHERE price > 20)</code>.','Danach <code>SELECT name FROM high</code>.']
+          })
+        ]
+      },
+      {
+        id:'c8', title:'Verließ der Unterabfragen', story:'Unterabfragen erlauben dir, eine Abfrage in einer anderen zu verschachteln — mächtig für Bedingungen und Filter.',
+        steps:[
+          sTeach({
+            teach:['Unterabfragen können im WHERE-Teil stehen oder mit <code>EXISTS</code> geprüft werden.','<code>EXISTS</code> prüft, ob eine Unterabfrage Zeilen liefert.'],
+            example:"SELECT * FROM products p WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.product_id = p.id)",
+            task:'Wähle alle Produkte, für die mindestens ein Eintrag in <code>order_items</code> existiert (nutze <code>EXISTS</code> und Alias <code>p</code>).',
+            answers:[/^SELECT\s+\*\s+FROM\s+products\s+p\s+WHERE\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+order_items\s+oi\s+WHERE\s+oi\.product_id\s*=\s*p\.id\s*\)\s*;?$/i],
+            hints:['Nutze Alias <code>p</code> für <code>products</code>.','Die Unterabfrage liefert nur eine Existenzprüfung, daher <code>SELECT 1</code> reicht.']
+          })
+        ]
+      },
+      {
+        id:'c9', title:'Galerie der Fenster', story:'Fensterfunktionen geben dir Einblick in Reihenfolgen und Ränge, ohne Gruppen zu verlieren.',
+        steps:[
+          sTeach({
+            teach:['Fensterfunktionen wie <code>RANK()</code>, <code>ROW_NUMBER()</code> oder <code>SUM(...) OVER (...)</code> berechnen Werte über Zeilengruppen ohne Aggregat-Gruppierung zu zerstören.'],
+            example:'SELECT p.name, SUM(oi.qty*oi.price) AS revenue, RANK() OVER (ORDER BY SUM(oi.qty*oi.price) DESC) AS rnk\nFROM order_items oi JOIN products p ON p.id=oi.product_id\nGROUP BY p.name',
+            task:'Zeige Produktname, Umsatz (SUM(qty*price) AS revenue) und Rang nach Umsatz (RANK()) – gruppiert nach Produktname.',
+            answers:[/^SELECT\s+p\.name\s*,\s*SUM\(\s*oi\.qty\s*\*\s*oi\.price\s*\)\s+AS\s+revenue\s*,\s*RANK\(\)\s+OVER\s*\(\s*ORDER\s+BY\s+SUM\(\s*oi\.qty\s*\*\s*oi\.price\s*\)\s+DESC\s*\)\s+AS\s+rnk\s+FROM\s+order_items\s+oi\s+JOIN\s+products\s+p\s+ON\s+p\.id\s*=\s*oi\.product_id\s+GROUP\s+BY\s+p\.name\s*;?$/i],
+            hints:['Fensterfunktionen stehen im SELECT und benutzen <code>OVER(...)</code>.','Die SUM muss sowohl in SELECT als auch in ORDER BY innerhalb des WINDOW-Ausdrucks auftauchen.']
+          })
+        ]
+      },
+      {
+        id:'c10', title:'Wachturm der Indizes', story:'Indizes beschleunigen Suchen — aber sie kosten Platz. Lerne, wann sie hilfreich sind.',
+        steps:[
+          sTeach({
+            teach:['Ein Index wird mit <code>CREATE INDEX name ON table(column)</code> angelegt.','Indizes sind nützlich für häufige WHERE- oder JOIN-Spalten.'],
+            example:'CREATE INDEX idx_products_category ON products(category);',
+            task:'Lege einen Index auf <code>products(category)</code> an. Wähle einen aussagekräftigen Indexnamen.',
+            answers:[/^CREATE\s+INDEX\s+\w+\s+ON\s+products\s*\(\s*category\s*\)\s*;?$/i],
+            hints:['Ein Name wie <code>idx_products_category</code> ist üblich.','Achte auf korrekte Reihenfolge: <code>CREATE INDEX name ON table(column)</code>.']
+          })
+        ]
+      }
+    );
+
+  function sTeach({teach, example, task, answers, hints}){return{type:'teach',teach,example,task,answers,hints}}
+
+  // ---------- DOM Refs ----------
+  const $ = s=>document.querySelector(s);
+  const navEl = $('#nav');
+  const lessonEl = $('#lesson');
+  const feedbackEl = $('#feedback');
+  const lvlFill = $('#lvlfill');
+
+  // ---------- Init UI ----------
+  renderSchema();
+  renderNav();
+  loadFromState();
+  updateStats();
+
+  // ---------- Rendering ----------
+  function renderNav(){
+    navEl.innerHTML = '';
+    chapters.forEach((c,ci)=>{
+      const b=document.createElement('button');
+      b.textContent = `${ci+1}. ${c.title}`;
+      b.onclick=()=>gotoChapter(ci,0);
+      if (ci===state.ci) b.classList.add('active');
+      navEl.appendChild(b);
+    });
+  }
+
+  function renderSchema(){
+    const s = Object.entries(schema).map(([t,cols])=>`
+      <details open>
+        <summary>${t}</summary>
+        <div class="cols">${cols.map(c=>`• ${c}`).join('<br>')}</div>
+      </details>`).join('');
+    $('#schema').innerHTML = s;
+  }
+
+  function renderStep(){
+    const chap = chapters[state.ci];
+    const step = chap.steps[state.si];
+
+    $('#chapterTitle').textContent = chap.title;
+    $('#storyText').classList.remove('typewriter');
+    $('#storyText').offsetWidth; // reflow
+    $('#storyText').classList.add('typewriter');
+    $('#storyText').textContent = chap.story;
+
+    lessonEl.innerHTML = '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'slideUp';
+
+    // Teach
+    const teach = document.createElement('div');
+    teach.className = 'teach';
+    teach.innerHTML = `
+      <h2>Erklärung</h2>
+      <ul class="small">${step.teach.map(x=>`<li>${x}</li>`).join('')}</ul>
+      <div class="code">Beispiel-Aufbau:\n${step.example}</div>`;
+
+    // Task
+    const task = document.createElement('div');
+    task.className = 'task';
+    task.innerHTML = `<strong>Aufgabe:</strong> ${step.task}`;
+
+    // Editor
+    const editor = document.createElement('div');
+    editor.className = 'editor';
+    const input = document.createElement('input');
+    input.id = 'answer';
+    input.placeholder = 'Schreibe hier deine SQL-Abfrage …';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    editor.appendChild(input);
+
+    const runBtn = btn('Check ▶', run);
+    const hintBtn = btn('Hinweis', ()=>showHint(step));
+    const solBtn  = btn('Lösung', ()=>toggleSolution(step));
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    actions.appendChild(runBtn);
+    actions.appendChild(hintBtn);
+    actions.appendChild(solBtn);
+
+    wrap.appendChild(teach);
+    wrap.appendChild(task);
+    wrap.appendChild(editor);
+    wrap.appendChild(actions);
+
+    lessonEl.appendChild(wrap);
+
+    input.focus();
+    input.addEventListener('keydown', e=>{
+      if ((e.ctrlKey||e.metaKey) && e.key==='Enter') run();
+      if (e.key==='ArrowRight') next();
+      if (e.key==='ArrowLeft') prev();
+    });
+
+    feedback('');
+  }
+
+  function btn(label,fn){
+    const b=document.createElement('button');
+    b.className='btn';
+    b.textContent=label;
+    b.onclick=fn;return b;
+  }
+
+  // ---------- Progress & XP ----------
+  function awardXP(){
+    state.xp += XP_PER_STEP;
+    const now = Date.now();
+    const DAY = 86400000;
+    state.streak = (now - state.lastHit < DAY) ? (state.streak+1) : 1;
+    state.lastHit = now;
+    saveState();
+    updateStats();
+    toast(`+${XP_PER_STEP} XP`);
+    confetti();
+  }
+
+  function updateStats(){
+    $('#xp').textContent = state.xp;
+    $('#streak').textContent = state.streak;
+    const lvl = 1 + Math.floor(state.xp/LEVEL_STEP);
+    $('#lvl').textContent = lvl;
+    const prog = (state.xp % LEVEL_STEP)/LEVEL_STEP;
+    lvlFill.style.transform = `scaleX(${prog})`;
+  }
+
+  function feedback(msg, good=false){
+    feedbackEl.innerHTML = msg ? (good?`<span style="color:var(--good)">${msg}</span>`:`<span style="color:var(--bad)">${msg}</span>`) : '';
+  }
+
+  function toast(msg){
+    const t=$('#toast'); t.textContent=msg; t.style.display='block';
+    setTimeout(()=>t.style.display='none',1400);
+  }
+
+  function confetti(){
+    const box = $('#confetti');
+    for(let i=0;i<30;i++){
+      const p = document.createElement('div');
+      const s = 6+Math.random()*8;
+      Object.assign(p.style,{position:'absolute',width:s+'px',height:s+'px',background:'#fff',left:(Math.random()*100)+'%',top:'-10px'});
+      box.appendChild(p);
+      const dur = 900+Math.random()*800; const x = (Math.random()*200-100);
+      p.animate([{transform:'translate(0,0)',opacity:1},{transform:`translate(${x}px,110vh) rotate(360deg)`,opacity:.9}],{duration:dur,easing:'cubic-bezier(.2,.8,.2,1)'}).onfinish=()=>p.remove();
+    }
+  }
+
+  // ---------- Checking ----------
+  function run(){
+    const chap = chapters[state.ci];
+    const step = chap.steps[state.si];
+    const val = ($('#answer')?.value||'').trim();
+    if(!val){feedback('Gib zuerst SQL ein.');return}
+    if (matchAny(val, step.answers)){
+      feedback('Richtig! Weiter so.', true);
+      awardXP();
+      setTimeout(next, 450);
+    } else {
+      feedback('Nicht ganz. Nutze „Hinweis“.');
+    }
+  }
+
+  function matchAny(val, patterns){
+    return patterns.some(rx => new RegExp(rx).test(val));
+  }
+
+  function showHint(step){
+    const shown = state.hints[hashStep()]||0;
+    const idx = Math.min(shown, step.hints.length-1);
+    feedback(`Hinweis: ${step.hints[idx]}`);
+    state.hints[hashStep()] = Math.min(shown+1, step.hints.length);
+    saveState();
+  }
+
+  function toggleSolution(step){
+    const key = 'sol:' + hashStep();
+    const shown = !!state.flags[key];
+    if (!shown){
+      const sol = step.answers[0].toString().replace(/^\/(.*)\/[a-z]*$/,'$1');
+      feedback(`Lösung (eine Variante): <span class="muted">${sol}</span>`, true);
+      state.flags[key]=1; saveState();
+    } else { feedback(''); state.flags[key]=0; saveState(); }
+  }
+
+  function hashStep(){ return `${state.ci}:${state.si}`; }
+
+  // ---------- Navigation ----------
+  function next(){
+    const chap = chapters[state.ci];
+    if (state.si < chap.steps.length-1){ state.si++; }
+    else { if (state.ci < chapters.length-1){ state.ci++; state.si=0; } }
+    saveState();
+    renderNav();
+    renderStep();
+  }
+  function prev(){
+    if (state.si>0){ state.si--; }
+    else if (state.ci>0){ state.ci--; state.si = chapters[state.ci].steps.length-1; }
+    saveState();
+    renderNav();
+    renderStep();
+  }
+  function gotoChapter(ci, si=0){ state.ci=ci; state.si=si; saveState(); renderNav(); renderStep(); }
+
+  document.addEventListener('keydown', e=>{
+    if ((e.ctrlKey||e.metaKey) && e.key==='Enter'){ run(); }
+    if (e.key==='ArrowRight'){ next(); }
+    if (e.key==='ArrowLeft'){ prev(); }
+  });
+
+  // ---------- Persistence ----------
+  function loadState(){
+    try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {xp:0,streak:0,lastHit:0,ci:0,si:0,hints:{},flags:{}} }catch{ return {xp:0,streak:0,lastHit:0,ci:0,si:0,hints:{},flags:{}} }
+  }
+  function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  function loadFromState(){ renderStep(); }
+
+  </script>
+</body>
+</html>
