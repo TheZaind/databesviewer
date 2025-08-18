@@ -331,6 +331,23 @@
 
   function sTeach({teach, example, task, answers, hints}){return{type:'teach',teach,example,task,answers,hints}}
 
+  // --- Automatisch Challenge-Phasen erzeugen ---
+  (function makeChallenges(){
+    chapters.forEach(chap=>{
+      const newSteps = [];
+      chap.steps.forEach(step=>{
+        newSteps.push(step);
+        const ch = JSON.parse(JSON.stringify(step));
+        ch.type = 'challenge';
+        // in challenges gibt's keine sofortigen Hinweise und keine sichtbare Lösung
+        ch.hints = [];
+        ch.noShowSolution = true;
+        newSteps.push(ch);
+      });
+      chap.steps = newSteps;
+    });
+  })();
+
   // ---------- DOM Refs ----------
   const $ = s=>document.querySelector(s);
   const navEl = $('#nav');
@@ -380,13 +397,21 @@
     const wrap = document.createElement('div');
     wrap.className = 'slideUp';
 
-    // Teach
-    const teach = document.createElement('div');
-    teach.className = 'teach';
-    teach.innerHTML = `
-      <h2>Erklärung</h2>
-      <ul class="small">${step.teach.map(x=>`<li>${x}</li>`).join('')}</ul>
-      <div class="code">Beispiel-Aufbau:\n${step.example}</div>`;
+    // Teach oder Challenge-Anzeige
+    if (step.type === 'teach'){
+      const teach = document.createElement('div');
+      teach.className = 'teach';
+      teach.innerHTML = `
+        <h2>Erklärung</h2>
+        <ul class="small">${(step.teach||[]).map(x=>`<li>${x}</li>`).join('')}</ul>
+        <div class="code">Beispiel-Aufbau:\n${step.example||''}</div>`;
+      wrap.appendChild(teach);
+    } else {
+      const notice = document.createElement('div');
+      notice.className = 'teach';
+      notice.innerHTML = `<h2>Aufgabe — Challenge</h2><div class="small muted">Jetzt ohne ausführliche Erklärung: probiere die Lösung selbstständig. Nutze Hinweise sparsam.</div>`;
+      wrap.appendChild(notice);
+    }
 
     // Task
     const task = document.createElement('div');
@@ -403,15 +428,19 @@
     input.spellcheck = false;
     editor.appendChild(input);
 
-    const runBtn = btn('Check ▶', run);
-    const hintBtn = btn('Hinweis', ()=>showHint(step));
-    const solBtn  = btn('Lösung', ()=>toggleSolution(step));
+  const runBtn = btn('Check ▶', run);
+  // Hinweise nur wenn vorhanden
+  let hintBtn;
+  if (step.hints && step.hints.length){ hintBtn = btn('Hinweis', ()=>showHint(step)); }
+  // Lösung nur wenn erlaubt
+  let solBtn;
+  if (!step.noShowSolution){ solBtn = btn('Lösung', ()=>toggleSolution(step)); }
 
     const actions = document.createElement('div');
     actions.className = 'actions';
-    actions.appendChild(runBtn);
-    actions.appendChild(hintBtn);
-    actions.appendChild(solBtn);
+  actions.appendChild(runBtn);
+  if (hintBtn) actions.appendChild(hintBtn);
+  if (solBtn) actions.appendChild(solBtn);
 
     wrap.appendChild(teach);
     wrap.appendChild(task);
