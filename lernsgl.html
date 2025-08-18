@@ -423,8 +423,7 @@
     input.focus();
     input.addEventListener('keydown', e=>{
       if ((e.ctrlKey||e.metaKey) && e.key==='Enter') run();
-      if (e.key==='ArrowRight') next();
-      if (e.key==='ArrowLeft') prev();
+      // Pfeiltasten-Navigation entfernt (verursachte unbeabsichtigtes Kapitel-Wechseln)
     });
 
     feedback('');
@@ -612,8 +611,7 @@
 
   document.addEventListener('keydown', e=>{
     if ((e.ctrlKey||e.metaKey) && e.key==='Enter'){ run(); }
-    if (e.key==='ArrowRight'){ next(); }
-    if (e.key==='ArrowLeft'){ prev(); }
+    // Pfeiltasten global deaktiviert — Navigation per Buttons/GUI bleibt
   });
 
   // ---------- Persistence ----------
