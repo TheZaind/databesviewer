@@ -52,6 +52,12 @@
   .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
   .feedback{min-height:28px;margin-top:6px}
 
+  /* --- Result / Output --- */
+  .result{background:#080808;border:2px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
+  .result table{width:100%;border-collapse:collapse;margin-top:6px}
+  .result th,.result td{border-bottom:1px solid var(--line);padding:8px;text-align:left;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+  .result .muted{color:var(--muted);font-size:12px}
+
     /* --- Schema --- */
     .schema details{border:2px solid var(--line);border-radius:12px;margin-bottom:8px}
     .schema summary{padding:8px;background:#000;cursor:pointer}
@@ -105,7 +111,8 @@
         <div id="storyText" class="typewriter">Willkommen, Rekrut. Vor dir liegt die Datenburg. Beherrsche die Artefakte der SQL-Kunst, um ihre Tore zu öffnen.</div>
       </div>
       <section id="lesson" class="lesson"></section>
-      <div class="feedback small muted" id="feedback"></div>
+  <div class="feedback small muted" id="feedback"></div>
+  <div id="result" class="result" style="display:none"></div>
     </main>
 
     <!-- RIGHT: Schema & Docs -->
@@ -479,13 +486,15 @@
     const step = chap.steps[state.si];
     const val = ($('#answer')?.value||'').trim();
     if(!val){feedback('Gib zuerst SQL ein.');return}
-    if (matchAny(val, step.answers)){
+    const correct = matchAny(val, step.answers);
+    if (correct){
       feedback('Richtig! Weiter so.', true);
       awardXP();
-      setTimeout(next, 450);
     } else {
       feedback('Nicht ganz. Nutze „Hinweis“.');
     }
+    // immer Ergebnis anzeigen (theoretische Ausgabe)
+    renderResult(step, val, correct);
   }
 
   function matchAny(val, patterns){
@@ -508,6 +517,77 @@
       feedback(`Lösung (eine Variante): <span class="muted">${sol}</span>`, true);
       state.flags[key]=1; saveState();
     } else { feedback(''); state.flags[key]=0; saveState(); }
+  }
+
+  // ---------- Result Rendering ----------
+  function renderResult(step, val, correct){
+    const out = $('#result');
+    out.style.display = 'block';
+    out.innerHTML = '';
+    const title = document.createElement('div');
+    title.className = 'muted small';
+    title.textContent = correct ? 'Erwartetes Ergebnis (korrekt):' : 'Theoretisches Ergebnis (Vorschau):';
+    out.appendChild(title);
+
+    // einfache, rule-based renderer für typische Aufgaben
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const tbody = document.createElement('tbody');
+
+    // fallbacks: basierend auf current chapter / task text
+    const task = step.task || '';
+    if (/Wähle alle Spalten der Tabelle products/i.test(task) || /SELECT \*/i.test(val)){
+      // beispielhafte products-tabelle
+      thead.innerHTML = '<tr><th>id</th><th>name</th><th>category</th><th>price</th></tr>';
+      tbody.innerHTML = `
+        <tr><td>1</td><td>Widget</td><td>Gadgets</td><td>9.99</td></tr>
+        <tr><td>2</td><td>Gizmo</td><td>Accessories</td><td>29.99</td></tr>
+        <tr><td>3</td><td>Thingamajig</td><td>Gadgets</td><td>14.50</td></tr>
+      `;
+    } else if (/Wähle nur die Spalten name und price/i.test(task) || /SELECT\s+name\s*,\s*price/i.test(val)){
+      thead.innerHTML = '<tr><th>name</th><th>price</th></tr>';
+      tbody.innerHTML = `
+        <tr><td>Widget</td><td>9.99</td></tr>
+        <tr><td>Gizmo</td><td>29.99</td></tr>
+      `;
+    } else if (/LIMIT\s*2/i.test(val) || /erste.*2/i.test(task)){
+      thead.innerHTML = '<tr><th>id</th><th>name</th><th>price</th></tr>';
+      tbody.innerHTML = `
+        <tr><td>1</td><td>Widget</td><td>9.99</td></tr>
+        <tr><td>2</td><td>Gizmo</td><td>29.99</td></tr>
+      `;
+    } else if (/ORDER BY\s+price\s+DESC/i.test(val) || /sortiere nach price absteigend/i.test(task)){
+      thead.innerHTML = '<tr><th>id</th><th>name</th><th>price</th></tr>';
+      tbody.innerHTML = `
+        <tr><td>2</td><td>Gizmo</td><td>29.99</td></tr>
+        <tr><td>3</td><td>Thingamajig</td><td>14.50</td></tr>
+        <tr><td>1</td><td>Widget</td><td>9.99</td></tr>
+      `;
+    } else if (/COUNT\(\*\)/i.test(val) || /Zähle alle Zeilen in products/i.test(task)){
+      thead.innerHTML = '<tr><th>count</th></tr>';
+      tbody.innerHTML = '<tr><td>3</td></tr>';
+    } else if (/GROUP BY\s+category/i.test(val) || /Produkte pro category/i.test(task)){
+      thead.innerHTML = '<tr><th>category</th><th>count</th></tr>';
+      tbody.innerHTML = `
+        <tr><td>Gadgets</td><td>2</td></tr>
+        <tr><td>Accessories</td><td>1</td></tr>
+      `;
+    } else {
+      thead.innerHTML = '<tr><th>Ergebnis</th></tr>';
+      tbody.innerHTML = '<tr><td class="muted">(keine Vorschau verfügbar für diese Abfrage)</td></tr>';
+    }
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    out.appendChild(table);
+
+    // Weiter-Button
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'btn';
+    nextBtn.style.marginTop = '10px';
+    nextBtn.textContent = 'Weiter ▶';
+    nextBtn.onclick = ()=>{ out.style.display='none'; next(); };
+    out.appendChild(nextBtn);
   }
 
   function hashStep(){ return `${state.ci}:${state.si}`; }
